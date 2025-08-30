@@ -92,7 +92,7 @@ export default function CalculateLove({ result, onBack }) {
               <div className="bg-white/5 rounded-2xl p-6 text-center">
                 <Clock className="w-8 h-8 text-yellow-400 mx-auto mb-3" />
                 <div className="text-3xl font-bold text-white">
-                  {result.averageReplyTime > 0 ? `${result.averageReplyTime}m` : 'N/A'}
+                  {result.averageReplyTime > 0 ? `${(result.averageReplyTime)/60}m` : 'N/A'}
                 </div>
                 <div className="text-gray-300">Avg Reply Time</div>
                 <div className="text-sm text-yellow-300 mt-2">
