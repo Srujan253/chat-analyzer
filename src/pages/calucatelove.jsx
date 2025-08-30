@@ -26,9 +26,21 @@ export default function CalculateLove({ result, onBack }) {
   };
 
   const getStatusText = (score) => {
-    if (score >= 70) return '💕 High Love Potential!';
-    if (score >= 40) return '💛 Moderate Connection';
-    return '💙 Friendship Zone';
+    if (score >= 70) return '🔥 High Interest Detected!';
+    if (score >= 40) return '⭐ Moderate Interest Found';
+    return '💭 Casual Interest Detected';
+  };
+
+  const formatReplyTime = (minutes) => {
+    if (minutes <= 0) return 'N/A';
+
+    if (minutes < 60) {
+      return `${Math.round(minutes)}m`;
+    } else {
+      const hours = Math.floor(minutes / 60);
+      const remainingMinutes = Math.round(minutes % 60);
+      return `${hours}h ${remainingMinutes}m`;
+    }
   };
 
   // --- UI ---
@@ -47,7 +59,7 @@ export default function CalculateLove({ result, onBack }) {
           <div className="flex justify-center items-center gap-3 mb-4">
             <Heart className="w-12 h-12 text-pink-400 animate-pulse" />
             <h1 className="text-5xl font-bold bg-gradient-to-r from-pink-400 via-red-400 to-purple-400 bg-clip-text text-transparent">
-              Love Analysis Results
+              Chat Analysis Results
             </h1>
             <Heart className="w-12 h-12 text-pink-400 animate-pulse" />
           </div>
@@ -92,7 +104,7 @@ export default function CalculateLove({ result, onBack }) {
               <div className="bg-white/5 rounded-2xl p-6 text-center">
                 <Clock className="w-8 h-8 text-yellow-400 mx-auto mb-3" />
                 <div className="text-3xl font-bold text-white">
-                  {result.averageReplyTime > 0 ? `${(result.averageReplyTime)/60}m` : 'N/A'}
+                  {formatReplyTime(result.averageReplyTime)}
                 </div>
                 <div className="text-gray-300">Avg Reply Time</div>
                 <div className="text-sm text-yellow-300 mt-2">

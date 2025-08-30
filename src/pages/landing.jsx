@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Upload, Heart, MessageCircle, Sparkles, TrendingUp, FileText, Users, Calendar } from 'lucide-react';
 import CalculateLove from './calucatelove';
 
-export default function LoveCalculator() {
+export default function ChatAnalyzer() {
   const [file, setFile] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState(null);
@@ -70,20 +70,20 @@ export default function LoveCalculator() {
       let totalMessages = 0;
       let totalEmojis = 0;
       const emojiCounts = {};
-      const messageTimes = [];
-      
+      const parsedMessages = [];
+
       // Parse each line to extract messages and timestamps
       lines.forEach(line => {
         // WhatsApp chat format: [DD/MM/YY, HH:MM:SS] Sender: Message
         // OR: DD/MM/YY, HH:MM AM/PM - Sender: Message
         const timestampMatch = line.match(/(?:\[)?(\d{1,2}\/\d{1,2}\/\d{2,4}), (\d{1,2}:\d{2}(?::\d{2})?)(?:\s*[ap]m)?(?:\])?(?:\s*-\s*)?/i);
-        
+
         if (timestampMatch) {
           totalMessages++;
           try {
             const [day, month, year] = timestampMatch[1].split('/');
             let timePart = timestampMatch[2];
-            
+
             // Convert 12-hour format to 24-hour format if needed
             if (line.toLowerCase().includes('pm') && !timePart.includes(':')) {
               const [hours, minutes] = timePart.split(':');
@@ -94,40 +94,81 @@ export default function LoveCalculator() {
             } else if (line.toLowerCase().includes('am') && timePart.startsWith('12')) {
               timePart = `00:${timePart.split(':')[1]}`;
             }
-            
+
             const formattedDate = `20${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${timePart}`;
             const dateObj = new Date(formattedDate);
             if (!isNaN(dateObj)) {
-              messageTimes.push(dateObj);
+              // Extract sender name
+              const messageStart = line.indexOf(timestampMatch[0]) + timestampMatch[0].length;
+              const senderAndMessage = line.slice(messageStart);
+              const sender = senderAndMessage.split(':')[0].trim();
+
+              parsedMessages.push({
+                time: dateObj,
+                sender: sender
+              });
             } else {
               console.warn('Invalid date parsed:', formattedDate);
             }
           } catch (e) {
             console.warn('Could not parse date:', timestampMatch[1]);
           }
-          
+
           // Count emojis in message - extract the message part after timestamp and sender
           const messageStart = line.indexOf(timestampMatch[0]) + timestampMatch[0].length;
           const messageText = line.slice(messageStart).split(':').slice(1).join(':').trim();
           const emojis = messageText.match(emojiRegex) || [];
           totalEmojis += emojis.length;
-          
+
           emojis.forEach(emoji => {
             emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
           });
         }
       });
       
-      // Calculate average reply time (in minutes)
-      let averageReplyTime = 0;
-      if (messageTimes.length > 1) {
-        let totalDiff = 0;
-        for (let i = 1; i < messageTimes.length; i++) {
-          const diff = Math.abs(messageTimes[i] - messageTimes[i - 1]);
-          totalDiff += diff;
+      // Calculate average reply time (in minutes, only when sender changes)
+      // Prepare structure for per-day stats
+      const replyTimesByDay = {};
+      const replyCountsByDay = {};
+
+      // Loop through messages
+      for (let i = 1; i < parsedMessages.length; i++) {
+        const prev = parsedMessages[i - 1];
+        const curr = parsedMessages[i];
+
+        // Skip if same sender → not a reply
+        if (curr.sender === prev.sender) continue;
+
+        // Group by date starting at 6 AM
+        // If message timestamp is before 6 AM, count it as part of the previous day
+        // Otherwise, count it as the current day
+        const hour = curr.time.getHours();
+        const dayKey = hour < 6
+          ? new Date(curr.time.getTime() - 24 * 60 * 60 * 1000).toISOString().split("T")[0]
+          : curr.time.toISOString().split("T")[0];
+
+        // Time difference in minutes
+        const diff = (curr.time - prev.time) / (1000 * 60);
+
+        // Ignore unrealistic gaps (e.g. >12h = probably not a "reply")
+        if (diff > 0 && diff < 12 * 60) {
+          replyTimesByDay[dayKey] = (replyTimesByDay[dayKey] || 0) + diff;
+          replyCountsByDay[dayKey] = (replyCountsByDay[dayKey] || 0) + 1;
         }
-        averageReplyTime = Math.round((totalDiff / (messageTimes.length - 1)) / (1000 * 60));
       }
+
+      // ✅ Daily averages
+      let totalDailyAverages = 0;
+      let dayCount = 0;
+
+      for (const day in replyTimesByDay) {
+        const avgDayReply = replyTimesByDay[day] / replyCountsByDay[day];
+        totalDailyAverages += avgDayReply;
+        dayCount++;
+      }
+
+      // ✅ Final average reply time across all days (in minutes)
+      const averageReplyTime = dayCount > 0 ? +(totalDailyAverages / dayCount).toFixed(2) : 0;
       
       // Calculate scores (0-100 scale)
       const messageScore = Math.min(totalMessages / 100 * 40, 40); // 40% weight
@@ -188,11 +229,11 @@ export default function LoveCalculator() {
     }
     
     if (score >= 70) {
-      summary += 'Strong indicators of romantic interest and connection.';
+      summary += 'Strong indicators of high interest and engagement.';
     } else if (score >= 40) {
-      summary += 'Shows potential for meaningful connection.';
+      summary += 'Shows moderate interest and good engagement.';
     } else {
-      summary += 'Suggests casual friendship level interaction.';
+      summary += 'Suggests casual level of interaction.';
     }
     
     return summary;
@@ -211,9 +252,9 @@ export default function LoveCalculator() {
   };
 
   const getStatusText = (score) => {
-    if (score >= 70) return '💕 High Interest Detected!';
-    if (score >= 40) return '💛 Moderate Interest Found';
-    return '💙 Friendship Vibes Detected';
+    if (score >= 70) return '🔥 High Interest Detected!';
+    if (score >= 40) return '⭐ Moderate Interest Found';
+    return '💭 Casual Interest Detected';
   };
 
   if (showResults && result) {
@@ -235,13 +276,13 @@ export default function LoveCalculator() {
           <div className="flex justify-center items-center gap-3 mb-4">
             <Heart className="w-12 h-12 text-pink-400 animate-pulse" />
             <h1 className="text-5xl font-bold bg-gradient-to-r from-pink-400 via-red-400 to-purple-400 bg-clip-text text-transparent">
-              Love Calculator
+              Chat Analyzer
             </h1>
             <Heart className="w-12 h-12 text-pink-400 animate-pulse" />
           </div>
           <p className="text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed">
-            Discover the hidden romantic potential in your WhatsApp conversations. 
-            Upload your chat export and let AI analyze the connection between you and your crush.
+            Discover the level of interest and engagement in your conversations.
+            Upload your chat export and let AI analyze the interaction patterns and connection dynamics.
           </p>
         </div>
 
@@ -255,7 +296,7 @@ export default function LoveCalculator() {
           <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20 hover:bg-white/15 transition-all duration-300">
             <TrendingUp className="w-8 h-8 text-purple-400 mb-4" />
             <h3 className="text-lg font-semibold text-white mb-2">Smart Scoring</h3>
-            <p className="text-gray-300">Get a precise percentage score based on mutual interest indicators and engagement levels.</p>
+            <p className="text-gray-300">Get a precise percentage score based on interaction patterns and engagement levels.</p>
           </div>
           <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20 hover:bg-white/15 transition-all duration-300">
             <Sparkles className="w-8 h-8 text-yellow-400 mb-4" />
@@ -341,8 +382,8 @@ export default function LoveCalculator() {
                 </span>
               ) : (
                 <span className="flex items-center gap-3">
-                  <Heart className="w-6 h-6" />
-                  Calculate Love Score
+                  <TrendingUp className="w-6 h-6" />
+                  Analyze Chat Interest
                 </span>
               )}
             </button>
@@ -359,7 +400,7 @@ export default function LoveCalculator() {
           <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-4 text-center border border-white/10">
             <Heart className="w-8 h-8 text-red-400 mx-auto mb-2" />
             <div className="text-2xl font-bold text-white">1.2K</div>
-            <div className="text-gray-300 text-sm">Love Matches</div>
+            <div className="text-gray-300 text-sm">Interest Insights</div>
           </div>
           <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-4 text-center border border-white/10">
             <TrendingUp className="w-8 h-8 text-green-400 mx-auto mb-2" />
@@ -375,7 +416,7 @@ export default function LoveCalculator() {
 
         {/* Footer */}
         <div className="text-center mt-12 text-gray-400">
-          <p>💝 Made with love for discovering love 💝</p>
+          <p>💬 Made with passion for understanding conversations 💬</p>
           <p className="text-sm mt-2">Your privacy is protected - chats are analyzed locally and never stored.</p>
         </div>
       </div>
