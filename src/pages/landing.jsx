@@ -1,10 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Upload, Heart, MessageCircle, Sparkles, TrendingUp, FileText, Users, Calendar } from 'lucide-react';
-import * as pdfjsLib from 'pdfjs-dist';
 import CalculateLove from './calucatelove';
-
-// Initialize PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 export default function LoveCalculator() {
   const [file, setFile] = useState(null);
@@ -15,12 +11,12 @@ export default function LoveCalculator() {
   const fileInputRef = useRef(null);
 
   const handleFileSelect = (selectedFile) => {
-    if (selectedFile && selectedFile.name.endsWith('.pdf')) {
+    if (selectedFile && selectedFile.name.endsWith('.txt')) {
       setFile(selectedFile);
       setResult(null);
       setShowResults(false);
     } else {
-      alert('Please select a valid WhatsApp chat export PDF file');
+      alert('Please select a valid WhatsApp chat export TXT file');
     }
   };
 
@@ -50,18 +46,7 @@ export default function LoveCalculator() {
     setAnalyzing(true);
     
     try {
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      
-      let fullText = '';
-      
-      // Extract text from all pages
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items.map(item => item.str).join(' ');
-        fullText += pageText + '\n';
-      }
+      const fullText = await file.text();
       
       // Analyze the chat
       const analysisResult = analyzeWhatsAppChat(fullText);
@@ -69,88 +54,109 @@ export default function LoveCalculator() {
       setShowResults(true);
       
     } catch (error) {
-      console.error('Error analyzing PDF:', error);
-      alert('Error analyzing the PDF file. Please make sure it\'s a valid WhatsApp chat export.');
+      console.error('Error analyzing TXT:', error);
+      alert('Error analyzing the TXT file. Please make sure it\'s a valid WhatsApp chat export.');
     } finally {
       setAnalyzing(false);
     }
   };
 
-  const analyzeWhatsAppChat = (text) => {
-    // Parse WhatsApp chat messages
-    const lines = text.split('\n').filter(line => line.trim());
-    const emojiRegex = /[\p{Emoji}]/gu;
-    
-    let totalMessages = 0;
-    let totalEmojis = 0;
-    const emojiCounts = {};
-    const messageTimes = [];
-    
-    // Parse each line to extract messages and timestamps
-    lines.forEach(line => {
-      // WhatsApp chat format: [DD/MM/YY, HH:MM:SS] Sender: Message
-      const timestampMatch = line.match(/\[(\d{1,2}\/\d{1,2}\/\d{2,4}), (\d{1,2}:\d{2}:\d{2})\]/);
+    const analyzeWhatsAppChat = (text) => {
+      // Parse WhatsApp chat messages
+      const lines = text.split('\n').filter(line => line.trim());
+      // Improved emoji regex to capture more emojis including multi-char ones
+      const emojiRegex = /(\p{Emoji_Presentation}|\p{Emoji}\uFE0F)/gu;
       
-      if (timestampMatch) {
-        totalMessages++;
-        try {
-          const [day, month, year] = timestampMatch[1].split('/');
-          const formattedDate = `20${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${timestampMatch[2]}`;
-          messageTimes.push(new Date(formattedDate));
-        } catch (e) {
-          console.warn('Could not parse date:', timestampMatch[1]);
+      let totalMessages = 0;
+      let totalEmojis = 0;
+      const emojiCounts = {};
+      const messageTimes = [];
+      
+      // Parse each line to extract messages and timestamps
+      lines.forEach(line => {
+        // WhatsApp chat format: [DD/MM/YY, HH:MM:SS] Sender: Message
+        // OR: DD/MM/YY, HH:MM AM/PM - Sender: Message
+        const timestampMatch = line.match(/(?:\[)?(\d{1,2}\/\d{1,2}\/\d{2,4}), (\d{1,2}:\d{2}(?::\d{2})?)(?:\s*[ap]m)?(?:\])?(?:\s*-\s*)?/i);
+        
+        if (timestampMatch) {
+          totalMessages++;
+          try {
+            const [day, month, year] = timestampMatch[1].split('/');
+            let timePart = timestampMatch[2];
+            
+            // Convert 12-hour format to 24-hour format if needed
+            if (line.toLowerCase().includes('pm') && !timePart.includes(':')) {
+              const [hours, minutes] = timePart.split(':');
+              const hourNum = parseInt(hours);
+              if (hourNum < 12) {
+                timePart = `${hourNum + 12}:${minutes}`;
+              }
+            } else if (line.toLowerCase().includes('am') && timePart.startsWith('12')) {
+              timePart = `00:${timePart.split(':')[1]}`;
+            }
+            
+            const formattedDate = `20${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${timePart}`;
+            const dateObj = new Date(formattedDate);
+            if (!isNaN(dateObj)) {
+              messageTimes.push(dateObj);
+            } else {
+              console.warn('Invalid date parsed:', formattedDate);
+            }
+          } catch (e) {
+            console.warn('Could not parse date:', timestampMatch[1]);
+          }
+          
+          // Count emojis in message - extract the message part after timestamp and sender
+          const messageStart = line.indexOf(timestampMatch[0]) + timestampMatch[0].length;
+          const messageText = line.slice(messageStart).split(':').slice(1).join(':').trim();
+          const emojis = messageText.match(emojiRegex) || [];
+          totalEmojis += emojis.length;
+          
+          emojis.forEach(emoji => {
+            emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
+          });
         }
-        
-        // Count emojis in message
-        const messageText = line.replace(timestampMatch[0], '').split(':').slice(1).join(':').trim();
-        const emojis = messageText.match(emojiRegex) || [];
-        totalEmojis += emojis.length;
-        
-        emojis.forEach(emoji => {
-          emojiCounts[emoji] = (emojiCounts[emoji] || 0) + 1;
-        });
+      });
+      
+      // Calculate average reply time (in minutes)
+      let averageReplyTime = 0;
+      if (messageTimes.length > 1) {
+        let totalDiff = 0;
+        for (let i = 1; i < messageTimes.length; i++) {
+          const diff = Math.abs(messageTimes[i] - messageTimes[i - 1]);
+          totalDiff += diff;
+        }
+        averageReplyTime = Math.round((totalDiff / (messageTimes.length - 1)) / (1000 * 60));
       }
-    });
-    
-    // Calculate average reply time (in minutes)
-    let averageReplyTime = 0;
-    if (messageTimes.length > 1) {
-      let totalDiff = 0;
-      for (let i = 1; i < messageTimes.length; i++) {
-        const diff = Math.abs(messageTimes[i] - messageTimes[i - 1]);
-        totalDiff += diff;
-      }
-      averageReplyTime = Math.round((totalDiff / (messageTimes.length - 1)) / (1000 * 60));
-    }
-    
-    // Calculate scores (0-100 scale)
-    const messageScore = Math.min(totalMessages / 100 * 40, 40); // 40% weight
-    const replyTimeScore = averageReplyTime > 0 ? Math.max(0, 30 - (averageReplyTime / 10)) : 15; // 30% weight (faster = better)
-    const emojiScore = Math.min(totalEmojis / 50 * 30, 30); // 30% weight
-    
-    const totalScore = Math.round(messageScore + replyTimeScore + emojiScore);
-    
-    // Get top emojis
-    const topEmojis = Object.entries(emojiCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([emoji, count]) => ({ emoji, count }));
-    
-    // Generate summary
-    const summary = generateChatSummary(totalMessages, averageReplyTime, totalEmojis, totalScore);
-    
-    return {
-      percentage: totalScore,
-      totalMessages,
-      averageReplyTime,
-      totalEmojis,
-      messageScore,
-      replyTimeScore,
-      emojiScore,
-      topEmojis,
-      summary
+      
+      // Calculate scores (0-100 scale)
+      const messageScore = Math.min(totalMessages / 100 * 40, 40); // 40% weight
+      const replyTimeScore = averageReplyTime > 0 ? Math.max(0, 30 - (averageReplyTime / 10)) : 15; // 30% weight (faster = better)
+      const emojiScore = Math.min(totalEmojis / 50 * 30, 30); // 30% weight
+      
+      const totalScore = Math.round(messageScore + replyTimeScore + emojiScore);
+      
+      // Get top emojis
+      const topEmojis = Object.entries(emojiCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([emoji, count]) => ({ emoji, count }));
+      
+      // Generate summary
+      const summary = generateChatSummary(totalMessages, averageReplyTime, totalEmojis, totalScore);
+      
+      return {
+        percentage: totalScore,
+        totalMessages,
+        averageReplyTime,
+        totalEmojis,
+        messageScore,
+        replyTimeScore,
+        emojiScore,
+        topEmojis,
+        summary
+      };
     };
-  };
 
   const generateChatSummary = (totalMessages, replyTime, emojiCount, score) => {
     let summary = '';
@@ -274,7 +280,7 @@ export default function LoveCalculator() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf"
+              accept=".txt"
               onChange={(e) => handleFileSelect(e.target.files[0])}
               className="hidden"
             />
@@ -292,7 +298,7 @@ export default function LoveCalculator() {
                   {file ? file.name : "Upload WhatsApp Chat Export"}
                 </h3>
                 <p className="text-gray-300 mb-4">
-                  Drag and drop your PDF file here, or click to browse
+                  Drag and drop your TXT file here, or click to browse
                 </p>
                 <button
                   onClick={() => fileInputRef.current?.click()}
@@ -314,8 +320,8 @@ export default function LoveCalculator() {
               <li>Open the chat you want to analyze in WhatsApp</li>
               <li>Tap the contact/group name at the top</li>
               <li>Scroll down and tap "Export Chat"</li>
-              <li>Choose "Without Media" and save as PDF</li>
-              <li>Upload the PDF file here to begin analysis</li>
+              <li>Choose "Without Media" and save as TXT</li>
+              <li>Upload the TXT file here to begin analysis</li>
             </ol>
           </div>
         </div>

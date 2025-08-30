@@ -1,9 +1,18 @@
 import React from 'react';
-import { Heart, MessageCircle, Clock, Smile, TrendingUp, ArrowLeft, BarChart3 } from 'lucide-react';
+import { 
+  Heart, 
+  MessageCircle, 
+  Clock, 
+  Smile, 
+  TrendingUp, 
+  ArrowLeft, 
+  BarChart3 
+} from 'lucide-react';
 
 export default function CalculateLove({ result, onBack }) {
   if (!result) return null;
 
+  // --- Helpers ---
   const getScoreColor = (score) => {
     if (score >= 70) return 'text-red-500';
     if (score >= 40) return 'text-yellow-500';
@@ -22,9 +31,10 @@ export default function CalculateLove({ result, onBack }) {
     return '💙 Friendship Zone';
   };
 
+  // --- UI ---
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-pink-900 to-red-900">
-      {/* Animated background */}
+      {/* Animated Background */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-pink-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse"></div>
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse animation-delay-2000"></div>
@@ -46,7 +56,8 @@ export default function CalculateLove({ result, onBack }) {
         {/* Main Result Card */}
         <div className="max-w-4xl mx-auto mb-8">
           <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 border border-white/20">
-            {/* Overall Score */}
+            
+            {/* Score */}
             <div className="text-center mb-8">
               <div className={`text-8xl font-bold ${getScoreColor(result.percentage)} mb-2`}>
                 {result.percentage}%
@@ -55,7 +66,7 @@ export default function CalculateLove({ result, onBack }) {
                 <div 
                   className={`h-full ${getScoreBg(result.percentage)} rounded-full transition-all duration-1000 ease-out`}
                   style={{ width: `${result.percentage}%` }}
-                ></div>
+                />
               </div>
               <h3 className="text-2xl font-semibold text-white mb-2">
                 {getStatusText(result.percentage)}
@@ -65,9 +76,9 @@ export default function CalculateLove({ result, onBack }) {
               </p>
             </div>
 
-            {/* Detailed Stats Grid */}
+            {/* Detailed Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              {/* Message Count */}
+              {/* Messages */}
               <div className="bg-white/5 rounded-2xl p-6 text-center">
                 <MessageCircle className="w-8 h-8 text-pink-400 mx-auto mb-3" />
                 <div className="text-3xl font-bold text-white">{result.totalMessages}</div>
@@ -89,7 +100,7 @@ export default function CalculateLove({ result, onBack }) {
                 </div>
               </div>
 
-              {/* Emoji Count */}
+              {/* Emojis */}
               <div className="bg-white/5 rounded-2xl p-6 text-center">
                 <Smile className="w-8 h-8 text-blue-400 mx-auto mb-3" />
                 <div className="text-3xl font-bold text-white">{result.totalEmojis}</div>
@@ -100,21 +111,19 @@ export default function CalculateLove({ result, onBack }) {
               </div>
             </div>
 
-            {/* Chat Summary */}
+            {/* Summary */}
             {result.summary && (
               <div className="bg-white/5 rounded-2xl p-6 mb-6">
                 <h4 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
                   <BarChart3 className="w-5 h-5 text-green-400" />
                   Chat Summary
                 </h4>
-                <p className="text-gray-300 leading-relaxed">
-                  {result.summary}
-                </p>
+                <p className="text-gray-300 leading-relaxed">{result.summary}</p>
               </div>
             )}
 
             {/* Top Emojis */}
-            {result.topEmojis && result.topEmojis.length > 0 && (
+            {result.topEmojis?.length > 0 && (
               <div className="bg-white/5 rounded-2xl p-6">
                 <h4 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
                   <Smile className="w-5 h-5 text-blue-400" />
